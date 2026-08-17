@@ -11,28 +11,27 @@ app = FastAPI()
 ngrok_fastapi.attach(app, ngrok_fastapi.Config(port=8000))
 ```
 
-## Why this exists
+## What it is
 
-ngrok's own official Python tooling — **`ngrok-asgi`**, a CLI entry point bundled inside
-`ngrok-python` itself (not a separate package) — already wraps any ASGI app with zero code
-changes:
+A small FastAPI-native library, not a CLI. `attach()`/`attach_many()` wrap an app's existing
+lifespan context manager (composing with it, not replacing it) so an ngrok tunnel opens when
+the app starts and closes when it stops. Config — reserved domain, pooling, a raw Traffic
+Policy document, ingress binding — is passed as real Python objects (`Config`, `Binding`)
+instead of CLI flags or files.
+
+This sits alongside, not instead of, ngrok's own official Python tooling —
+**`ngrok-asgi`**, a CLI entry point bundled inside `ngrok-python` itself (not a separate
+package), which already wraps any ASGI app with zero code changes:
 
 ```
 ngrok-asgi uvicorn app:app
 ```
 
-That part isn't rebuilt here. What's missing — confirmed by reading `ngrok-asgi`'s entire CLI
-parser directly, not a search miss — is:
-
-- No `--traffic-policy` flag at all, despite Traffic Policy being ngrok's confirmed,
-  actively-developed replacement for the legacy per-module config it does support
-  (`--basic-auth`, `--oauth-provider`, `--allow-cidr`, etc.)
-- No pooling support
-- No `--binding` (public/internal/kubernetes)
-- Config files explicitly disabled (`args.config` → hard-coded fatal error)
-
-`ngrok_fastapi.attach()` fills that gap as a small FastAPI-native alternative, carrying that
-config as real Python objects instead of CLI flags.
+`ngrok-asgi` covers the legacy per-module config surface (`--basic-auth`, `--oauth-provider`,
+`--allow-cidr`, etc.) but — confirmed by reading its entire CLI parser directly — has no
+`--traffic-policy` flag, no pooling support, no `--binding`, and explicitly disables config
+files (`args.config` → hard-coded fatal error). `ngrok_fastapi.attach()` covers exactly that
+gap.
 
 ## Setup
 
