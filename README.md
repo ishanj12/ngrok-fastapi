@@ -13,25 +13,8 @@ ngrok_fastapi.attach(app, ngrok_fastapi.Config(port=8000))
 
 ## What it is
 
-A small FastAPI-native library, not a CLI. `attach()`/`attach_many()` wrap an app's existing
-lifespan context manager (composing with it, not replacing it) so an ngrok tunnel opens when
-the app starts and closes when it stops. Config — reserved domain, pooling, a raw Traffic
-Policy document, ingress binding — is passed as real Python objects (`Config`, `Binding`)
-instead of CLI flags or files.
-
-This sits alongside, not instead of, ngrok's own official Python tooling —
-**`ngrok-asgi`**, a CLI entry point bundled inside `ngrok-python` itself (not a separate
-package), which already wraps any ASGI app with zero code changes:
-
-```
-ngrok-asgi uvicorn app:app
-```
-
-`ngrok-asgi` covers the legacy per-module config surface (`--basic-auth`, `--oauth-provider`,
-`--allow-cidr`, etc.) but — confirmed by reading its entire CLI parser directly — has no
-`--traffic-policy` flag, no pooling support, no `--binding`, and explicitly disables config
-files (`args.config` → hard-coded fatal error). `ngrok_fastapi.attach()` covers exactly that
-gap.
+A small FastAPI-native ngrok library. `attach()`/`attach_many()` wrap an app's existing
+lifespan context manager so an ngrok tunnel opens when the app starts and closes when it stops. 
 
 ## Setup
 
