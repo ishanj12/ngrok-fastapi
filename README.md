@@ -13,25 +13,8 @@ ngrok_fastapi.attach(app, ngrok_fastapi.Config(port=8000))
 
 ## What it is
 
-A small FastAPI-native library, not a CLI. `attach()`/`attach_many()` wrap an app's existing
-lifespan context manager (composing with it, not replacing it) so an ngrok tunnel opens when
-the app starts and closes when it stops. Config — reserved domain, pooling, a raw Traffic
-Policy document, ingress binding — is passed as real Python objects (`Config`, `Binding`)
-instead of CLI flags or files.
-
-This sits alongside, not instead of, ngrok's own official Python tooling —
-**`ngrok-asgi`**, a CLI entry point bundled inside `ngrok-python` itself (not a separate
-package), which already wraps any ASGI app with zero code changes:
-
-```
-ngrok-asgi uvicorn app:app
-```
-
-`ngrok-asgi` covers the legacy per-module config surface (`--basic-auth`, `--oauth-provider`,
-`--allow-cidr`, etc.) but — confirmed by reading its entire CLI parser directly — has no
-`--traffic-policy` flag, no pooling support, no `--binding`, and explicitly disables config
-files (`args.config` → hard-coded fatal error). `ngrok_fastapi.attach()` covers exactly that
-gap.
+A small FastAPI-native ngrok library. `attach()`/`attach_many()` wrap an app's existing
+lifespan context manager so an ngrok tunnel opens when the app starts and closes when it stops. 
 
 ## Setup
 
@@ -81,34 +64,6 @@ ngrok_fastapi.attach_many(app, [
     ngrok_fastapi.Config(port=8001, url="api.mycompany.ngrok.app"),
 ])
 ```
-
-## Collisions
-
-- **Same-session, no domain / same domain, no pooling**: does **not** error on its own —
-  confirmed live, independently, against all three SDKs in this series (JS, Rust, Python):
-  two listeners opened this way both succeed with the identical URL, no error either time,
-  only the most recently opened one actually receiving traffic. `attach_many` guards against
-  it before opening any session: pass configs that would collide without `pooling=True` on
-  all of them, and it raises `CollisionError` immediately.
-- **Cross-session claim** (another running agent, or a dashboard-configured Cloud Endpoint
-  already bound to that domain): ngrok rejects this loudly on its own (`ERR_NGROK_334`).
-
-## A real deadlock this project found and fixed
-
-Live end-to-end testing (not just unit tests) surfaced a genuine bug: `uvicorn` runs the
-ASGI app's lifespan *startup* completely before binding the port the app serves on
-(confirmed by reading `uvicorn`'s own source). Separately, `ngrok-python`'s
-`listener.forward(addr)` is a long-running background operation, not a quick "set up
-forwarding" call — awaiting it inline never returns, even after the target starts accepting
-connections (confirmed in isolation from FastAPI entirely).
-
-Combined, calling `await listener.forward(...)` directly inside lifespan startup — targeting
-the same app's own port, before uvicorn has bound it — is a hard deadlock. The fix:
-`forward()` is scheduled as a background task (`asyncio.ensure_future`, not
-`asyncio.create_task` — it returns a native Future, not a plain coroutine) instead of being
-awaited inline, and cancelled alongside `listener.close()` on shutdown. This is why
-`ngrok_fastapi.attach()` exists as more than a thin pass-through — the naive version of this
-integration deadlocks on every request.
 
 ## Development
 
