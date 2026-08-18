@@ -75,6 +75,13 @@ See [`examples/with_config.py`](examples/with_config.py) for a working example.
 ties all of them to the same app's lifespan. `attach(app, config)` is just
 `attach_many(app, [config])`.
 
+```python
+ngrok_fastapi.attach_many(app, [
+    ngrok_fastapi.Config(port=8000, url="app.mycompany.ngrok.app"),
+    ngrok_fastapi.Config(port=8001, url="api.mycompany.ngrok.app"),
+])
+```
+
 ## Collisions
 
 - **Same-session, no domain / same domain, no pooling**: does **not** error on its own —
