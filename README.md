@@ -58,33 +58,6 @@ See [`examples/with_config.py`](examples/with_config.py) for a working example.
 ties all of them to the same app's lifespan. `attach(app, config)` is just
 `attach_many(app, [config])`.
 
-## Collisions
-
-- **Same-session, no domain / same domain, no pooling**: does **not** error on its own —
-  confirmed live, independently, against all three SDKs in this series (JS, Rust, Python):
-  two listeners opened this way both succeed with the identical URL, no error either time,
-  only the most recently opened one actually receiving traffic. `attach_many` guards against
-  it before opening any session: pass configs that would collide without `pooling=True` on
-  all of them, and it raises `CollisionError` immediately.
-- **Cross-session claim** (another running agent, or a dashboard-configured Cloud Endpoint
-  already bound to that domain): ngrok rejects this loudly on its own (`ERR_NGROK_334`).
-
-## A real deadlock this project found and fixed
-
-Live end-to-end testing (not just unit tests) surfaced a genuine bug: `uvicorn` runs the
-ASGI app's lifespan *startup* completely before binding the port the app serves on
-(confirmed by reading `uvicorn`'s own source). Separately, `ngrok-python`'s
-`listener.forward(addr)` is a long-running background operation, not a quick "set up
-forwarding" call — awaiting it inline never returns, even after the target starts accepting
-connections (confirmed in isolation from FastAPI entirely).
-
-Combined, calling `await listener.forward(...)` directly inside lifespan startup — targeting
-the same app's own port, before uvicorn has bound it — is a hard deadlock. The fix:
-`forward()` is scheduled as a background task (`asyncio.ensure_future`, not
-`asyncio.create_task` — it returns a native Future, not a plain coroutine) instead of being
-awaited inline, and cancelled alongside `listener.close()` on shutdown. This is why
-`ngrok_fastapi.attach()` exists as more than a thin pass-through — the naive version of this
-integration deadlocks on every request.
 
 ## Development
 
