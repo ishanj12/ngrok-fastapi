@@ -1,0 +1,65 @@
+name: Publish
+
+on:
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: Run tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: python -m pip install -e ".[dev]"
+
+      - name: Test
+        run: pytest
+        env:
+          NGROK_AUTHTOKEN: ${{ secrets.NGROK_AUTHTOKEN }}
+
+  publish:
+    name: Publish to PyPI
+    runs-on: ubuntu-latest
+    needs: test
+    # Trusted publishing: PyPI trusts this repo + workflow + environment via
+    # GitHub OIDC, so no API token secret is required.
+    environment: pypi
+    permissions:
+      id-token: write
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Build distributions
+        run: |
+          python -m pip install build
+          python -m build
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          skip-existing: true
+
+      - name: Tag Release
+        run: |
+          git config user.name "GitHub Action"
+          git config user.email noreply@ngrok.com
+          version=$(python -c "import tomllib; print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])")
+          tag="v$version"
+          echo "Tagging release: $tag"
+          git fetch --tags
+          if git rev-parse "refs/tags/$tag" > /dev/null 2>&1; then
+            echo "Tag $tag already exists, skipping tag creation."
+          else
+            git tag -a -m "Version ${version}" "$tag"
+            git push --tags
+          fi
